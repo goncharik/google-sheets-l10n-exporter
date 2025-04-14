@@ -6,14 +6,14 @@ A Google Sheets script that takes a sheet with translations and generates locali
 
 - For **Android**: Creates XML resource files with strings and plurals
 - For **iOS**: 
-  - **Classic format** (`script.gs`): Creates Localizable.strings files and Localizable.stringsdict for plurals
-  - **Modern format** (`script_modern.gs`): Creates Localizable.xcstrings files which combine both regular strings and plurals in a single JSON file
+  - **Legacy format**: Creates Localizable.strings files and Localizable.stringsdict for plurals
+  - **Modern format**: Creates Localizable.xcstrings files which combine both regular strings and plurals in a single JSON file
 
 ## Installation
 
 1. Open your Google Sheet
 2. Go to **Extensions → Apps Script**
-3. Copy the contents of either `script.gs` (classic) or `script_modern.gs` (modern .xcstrings iOS format) into the editor
+3. Copy the contents of `script.gs` into the editor
 4. Save the project
 5. Refresh your Google Sheet
 
@@ -22,9 +22,9 @@ A Google Sheets script that takes a sheet with translations and generates locali
 1. Format your sheet according to the guidelines below
 2. From your sheet, access the custom menu: **Custom Export**
 3. Select one of the following:
-   - **iOS** (classic format - creates .strings and .stringsdict files)
-   - **iOS (.xcstrings)** (modern format - creates .xcstrings files)
-   - **Android** (creates strings.xml)
+   - **iOS (Legacy)** - creates .strings and .stringsdict files
+   - **iOS (.xcstrings)** - creates modern .xcstrings file
+   - **Android** - creates strings.xml
 4. Copy the generated files to your project
 
 ## Sheet Format
@@ -78,7 +78,7 @@ For Android string arrays, append `[]` to the key. Consecutive rows with the sam
 
 ## Configuration
 
-### Common Configuration (Both Scripts)
+The script has several configurable properties at the top of the file:
 
 ```javascript
 // Number of languages in your sheet (columns after identifier columns)
@@ -89,13 +89,7 @@ var FIRST_COLUMN_POSITION = 1;
 
 // Position of the header row
 var HEADER_ROW_POSITION = 1;
-```
 
-### Modern Script Additional Configuration
-
-The modern script (`script_modern.gs`) has additional configuration options for the .xcstrings format:
-
-```javascript
 // Source language identifier (used for .xcstrings format)
 var SOURCE_LANGUAGE = "en";
 
@@ -103,19 +97,22 @@ var SOURCE_LANGUAGE = "en";
 var LANGUAGE_CODES = ["en", "de"];
 ```
 
-Make sure to set the `LANGUAGE_CODES` array to match your actual language codes in the correct order.
+Make sure to:
+1. Set `NUMBER_OF_LANGUAGES` to match the number of language columns in your sheet
+2. Update `LANGUAGE_CODES` array to match your actual language codes in the correct order
+3. Set `SOURCE_LANGUAGE` to your development language (typically "en")
 
 ## Exported Files
 
 ### Android
-- `strings.xml` with string and plural resources
+- `strings.xml` with string and plural resources (one per language)
 
-### iOS 
-- **Classic format** (`script.gs`):
-  - `Localizable.strings` for regular strings
-  - `Localizable.stringsdict` for plurals
-- **Modern format** (`script_modern.gs`):
-  - `Localizable.xcstrings` (combines both regular strings and plurals in a single JSON file)
+### iOS Legacy Format
+- `Localizable.strings` for regular strings (one per language)
+- `Localizable.stringsdict` for plurals (one per language)
+
+### iOS Modern Format
+- `Localizable.xcstrings` (combines all languages and both regular strings and plurals in a single JSON file)
 
 ## Modern iOS Format (.xcstrings)
 

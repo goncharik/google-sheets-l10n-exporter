@@ -18,6 +18,18 @@ var FIRST_COLUMN_POSITION = 1;
 */
 var HEADER_ROW_POSITION = 1;
 
+/*
+   Source language identifier (used for .xcstrings format)
+   This should match one of your language codes in the spreadsheet, like "en"
+*/
+var SOURCE_LANGUAGE = "en";
+
+/*
+   Language codes for each column after the identifier columns
+   These should match the language codes used by iOS and Android, e.g., ["en", "de", "fr"]
+*/
+var LANGUAGE_CODES = ["en", "de"];
+
 
 // Constants
 
@@ -38,15 +50,27 @@ var PLURAL_QUANTITIES = ['zero', 'one', 'two', 'few', 'many', 'other'];
 function onOpen() {
     var ui = SpreadsheetApp.getUi();
     ui.createMenu('Custom Export')
-        .addItem('iOS', 'exportForIos')
+        .addItem('iOS (Legacy)', 'exportForIosLegacy')
+        .addItem('iOS (.xcstrings)', 'exportForIosModern')
         .addItem('Android', 'exportForAndroid')
         .addToUi();
 }
 
-function exportForIos() {
+function exportForIosLegacy() {
     var e = {
         parameter: {
-            language: LANGUAGE_IOS
+            language: LANGUAGE_IOS,
+            modern: false
+        }
+    };
+    exportSheet(e);
+}
+
+function exportForIosModern() {
+    var e = {
+        parameter: {
+            language: LANGUAGE_IOS,
+            modern: true
         }
     };
     exportSheet(e);
@@ -76,29 +100,49 @@ function exportSheet(e) {
 
     var outputStrings = []; // Array to hold the generated file contents
 
-    for (var langIndex = 0; langIndex < NUMBER_OF_LANGUAGES; langIndex++) {
-        var langOutput = {}; // Object to hold outputs for this language
-
-        if (options.language === LANGUAGE_ANDROID) {
-            langOutput.androidXml = makeAndroidString(processedData.regular, processedData.plurals, langIndex, options);
-        } else if (options.language === LANGUAGE_IOS) {
-            langOutput.iosStrings = makeIosString(processedData.regular, langIndex, options);
-            // Only generate stringsdict if there are plurals
-            if (Object.keys(processedData.plurals).length > 0) {
-                langOutput.iosStringsdict = makeIosStringsdict(processedData.plurals, langIndex, options);
+    if (options.language === LANGUAGE_ANDROID) {
+        // For Android, generate output for each language
+        for (var langIndex = 0; langIndex < NUMBER_OF_LANGUAGES; langIndex++) {
+            var androidXml = makeAndroidString(processedData.regular, processedData.plurals, langIndex, options);
+            outputStrings.push({ androidXml: androidXml, langCode: LANGUAGE_CODES[langIndex] });
+        }
+    } else if (options.language === LANGUAGE_IOS) {
+        if (options.modern) {
+            // New .xcstrings format (combines both regular strings and plurals in a single file)
+            var xcstrings = makeIosXCStrings(processedData.regular, processedData.plurals, options);
+            outputStrings.push({ xcstrings: xcstrings });
+        } else {
+            // Legacy format (.strings and .stringsdict) - generate for each language
+            for (var langIndex = 0; langIndex < NUMBER_OF_LANGUAGES; langIndex++) {
+                var output = {
+                    iosStrings: makeIosString(processedData.regular, langIndex, options),
+                    langCode: LANGUAGE_CODES[langIndex]
+                };
+                
+                // Only add stringsdict if there are plurals
+                if (Object.keys(processedData.plurals).length > 0) {
+                    output.iosStringsdict = makeIosStringsdict(processedData.plurals, langIndex, options);
+                }
+                
+                outputStrings.push(output);
             }
         }
-        outputStrings.push(langOutput);
     }
 
-    // Display results (needs adjustment for multiple outputs per language/platform)
+    // Display results
     return displayTexts_(outputStrings, options);
 }
-
 
 function getExportOptions(e) {
     var options = {};
     options.language = e && e.parameter.language || DEFAULT_LANGUAGE;
+    options.modern = e && e.parameter.modern || false;
+    
+    // Ensure LANGUAGE_CODES has at least NUMBER_OF_LANGUAGES entries
+    while (LANGUAGE_CODES.length < NUMBER_OF_LANGUAGES) {
+        LANGUAGE_CODES.push("lang" + (LANGUAGE_CODES.length + 1));
+    }
+    
     return options;
 }
 
@@ -141,28 +185,49 @@ function makeTextBox(id, content, title) {
     return textArea;
 }
 
-// Modified display function to handle multiple outputs
+// Display function to handle multiple outputs
 function displayTexts_(languageOutputs, options) {
     var app = HtmlService.createHtmlOutput().setWidth(800).setHeight(600);
     var htmlContent = '';
 
     for (var i = 0; i < languageOutputs.length; i++) {
         var langOutput = languageOutputs[i];
-        var langTitle = NUMBER_OF_LANGUAGES > 1 ? "Language " + (i + 1) : "Output"; // Simple language labeling
+        var langTitle = "";
+        
+        // Set appropriate titles based on output type and language
+        if (langOutput.langCode) {
+            langTitle = "Language: " + langOutput.langCode;
+        } else if (NUMBER_OF_LANGUAGES > 1 && !options.modern) {
+            langTitle = "Language " + (i + 1);
+        } else {
+            langTitle = "Output";
+        }
+        
         htmlContent += '<h2>' + langTitle + '</h2>';
 
         if (options.language === LANGUAGE_ANDROID) {
-            htmlContent += makeTextBox("export_android_" + i, langOutput.androidXml, "strings.xml");
+            htmlContent += makeTextBox("export_android_" + i, langOutput.androidXml, 
+                "strings.xml" + (langOutput.langCode ? " (" + langOutput.langCode + ")" : ""));
         } else if (options.language === LANGUAGE_IOS) {
-            htmlContent += makeTextBox("export_ios_strings_" + i, langOutput.iosStrings, "Localizable.strings");
-            if (langOutput.iosStringsdict) {
-                htmlContent += makeTextBox("export_ios_stringsdict_" + i, langOutput.iosStringsdict, "Localizable.stringsdict");
+            if (options.modern) {
+                htmlContent += makeTextBox("export_ios_xcstrings_" + i, langOutput.xcstrings, 
+                    "Localizable.xcstrings");
+            } else {
+                htmlContent += makeTextBox("export_ios_strings_" + i, langOutput.iosStrings, 
+                    "Localizable.strings" + (langOutput.langCode ? " (" + langOutput.langCode + ")" : ""));
+                if (langOutput.iosStringsdict) {
+                    htmlContent += makeTextBox("export_ios_stringsdict_" + i, langOutput.iosStringsdict, 
+                        "Localizable.stringsdict" + (langOutput.langCode ? " (" + langOutput.langCode + ")" : ""));
+                }
             }
         }
     }
 
+    var title = "Translations (" + options.language + 
+                (options.language === LANGUAGE_IOS ? (options.modern ? " Modern" : " Legacy") : "") + ")";
+    
     app.setContent(htmlContent);
-    SpreadsheetApp.getUi().showModalDialog(app, "Translations (" + options.language + ")");
+    SpreadsheetApp.getUi().showModalDialog(app, title);
     return app; // Return is needed for testing, but dialog is shown regardless
 }
 
@@ -258,6 +323,117 @@ function processDataForPlurals_(rowsData, platformKey) {
 // --- Creating iOS and Android strings ---
 
 /*
+   Creates the .xcstrings file for iOS (modern format)
+   This combines both regular strings and plurals into a single JSON file
+*/
+function makeIosXCStrings(regularStrings, plurals, options) {
+    var xcstrings = {
+        "sourceLanguage": SOURCE_LANGUAGE,
+        "strings": {},
+        "version": "1.0"
+    };
+    
+    // Process regular strings
+    for (var i = 0; i < regularStrings.length; i++) {
+        var o = regularStrings[i];
+        var identifier = o.identifierIos;
+        
+        // Skip if identifier is missing or it's an array (not supported in iOS)
+        if (!identifier || identifier === "" || identifier.endsWith("[]")) {
+            continue;
+        }
+        
+        // Create the entry for this string key
+        var entry = {
+            "localizations": {}
+        };
+        
+        // Add each language's translation
+        for (var langIndex = 0; langIndex < NUMBER_OF_LANGUAGES; langIndex++) {
+            var text = o.texts[langIndex];
+            if (text !== undefined && text !== "") {
+                var langCode = LANGUAGE_CODES[langIndex];
+                entry.localizations[langCode] = {
+                    "stringUnit": {
+                        "state": "translated",
+                        "value": text
+                    }
+                };
+            }
+        }
+        
+        // Only add the entry if it has at least one localization
+        if (Object.keys(entry.localizations).length > 0) {
+            xcstrings.strings[identifier] = entry;
+        }
+    }
+    
+    // Process plurals
+    for (var baseKey in plurals) {
+        if (plurals.hasOwnProperty(baseKey)) {
+            var pluralData = plurals[baseKey];
+            
+            // Create entry for this plural key
+            var entry = {
+                "localizations": {}
+            };
+            
+            // Process each language
+            for (var langIndex = 0; langIndex < NUMBER_OF_LANGUAGES; langIndex++) {
+                var langCode = LANGUAGE_CODES[langIndex];
+                var hasTranslationsForLang = false;
+                
+                // Check if any plural form has a translation for this language
+                for (var quantity in pluralData) {
+                    if (pluralData.hasOwnProperty(quantity)) {
+                        var text = pluralData[quantity].texts[langIndex];
+                        if (text !== undefined && text !== "") {
+                            hasTranslationsForLang = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (hasTranslationsForLang) {
+                    // Initialize the variations object for plurals
+                    var variations = {
+                        "plural": {}
+                    };
+                    
+                    // Add each plural form that has a translation
+                    for (var quantity in pluralData) {
+                        if (pluralData.hasOwnProperty(quantity)) {
+                            var text = pluralData[quantity].texts[langIndex];
+                            if (text !== undefined && text !== "") {
+                                variations.plural[quantity] = {
+                                    "stringUnit": {
+                                        "state": "translated",
+                                        "value": text
+                                    }
+                                };
+                            }
+                        }
+                    }
+                    
+                    // Add the variations to the language
+                    entry.localizations[langCode] = {
+                        "variations": variations
+                    };
+                }
+            }
+            
+            // Only add the entry if it has at least one localization
+            if (Object.keys(entry.localizations).length > 0) {
+                xcstrings.strings[baseKey] = entry;
+            }
+        }
+    }
+    
+    // Convert to a pretty-printed JSON string
+    return JSON.stringify(xcstrings, null, 2);
+}
+
+/*
    Creates the strings.xml file for Android, including <plurals>.
 */
 function makeAndroidString(regularStrings, plurals, textIndex, options) {
@@ -338,6 +514,7 @@ function makeAndroidString(regularStrings, plurals, textIndex, options) {
 
 /*
    Creates the Localizable.strings file content for iOS (non-plural keys only).
+   Used in legacy iOS export.
 */
 function makeIosString(regularStrings, textIndex, options) {
     var stringsContent = "";
@@ -362,6 +539,7 @@ function makeIosString(regularStrings, textIndex, options) {
 
 /*
    Creates the Localizable.stringsdict file content for iOS plurals.
+   Used in legacy iOS export.
 */
 function makeIosStringsdict(plurals, textIndex, options) {
     var dictContent = "";
@@ -639,4 +817,4 @@ function isAlnum_(char) {
 
 function isDigit_(char) {
     return char >= '0' && char <= '9';
-}
+} 
