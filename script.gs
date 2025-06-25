@@ -118,12 +118,12 @@ function exportSheet(e) {
                     iosStrings: makeIosString(processedData.regular, langIndex, options),
                     langCode: LANGUAGE_CODES[langIndex]
                 };
-                
+
                 // Only add stringsdict if there are plurals
                 if (Object.keys(processedData.plurals).length > 0) {
                     output.iosStringsdict = makeIosStringsdict(processedData.plurals, langIndex, options);
                 }
-                
+
                 outputStrings.push(output);
             }
         }
@@ -137,12 +137,12 @@ function getExportOptions(e) {
     var options = {};
     options.language = e && e.parameter.language || DEFAULT_LANGUAGE;
     options.modern = e && e.parameter.modern || false;
-    
+
     // Ensure LANGUAGE_CODES has at least NUMBER_OF_LANGUAGES entries
     while (LANGUAGE_CODES.length < NUMBER_OF_LANGUAGES) {
         LANGUAGE_CODES.push("lang" + (LANGUAGE_CODES.length + 1));
     }
-    
+
     return options;
 }
 
@@ -193,7 +193,7 @@ function displayTexts_(languageOutputs, options) {
     for (var i = 0; i < languageOutputs.length; i++) {
         var langOutput = languageOutputs[i];
         var langTitle = "";
-        
+
         // Set appropriate titles based on output type and language
         if (langOutput.langCode) {
             langTitle = "Language: " + langOutput.langCode;
@@ -202,30 +202,30 @@ function displayTexts_(languageOutputs, options) {
         } else {
             langTitle = "Output";
         }
-        
+
         htmlContent += '<h2>' + langTitle + '</h2>';
 
         if (options.language === LANGUAGE_ANDROID) {
-            htmlContent += makeTextBox("export_android_" + i, langOutput.androidXml, 
+            htmlContent += makeTextBox("export_android_" + i, langOutput.androidXml,
                 "strings.xml" + (langOutput.langCode ? " (" + langOutput.langCode + ")" : ""));
         } else if (options.language === LANGUAGE_IOS) {
             if (options.modern) {
-                htmlContent += makeTextBox("export_ios_xcstrings_" + i, langOutput.xcstrings, 
+                htmlContent += makeTextBox("export_ios_xcstrings_" + i, langOutput.xcstrings,
                     "Localizable.xcstrings");
             } else {
-                htmlContent += makeTextBox("export_ios_strings_" + i, langOutput.iosStrings, 
+                htmlContent += makeTextBox("export_ios_strings_" + i, langOutput.iosStrings,
                     "Localizable.strings" + (langOutput.langCode ? " (" + langOutput.langCode + ")" : ""));
                 if (langOutput.iosStringsdict) {
-                    htmlContent += makeTextBox("export_ios_stringsdict_" + i, langOutput.iosStringsdict, 
+                    htmlContent += makeTextBox("export_ios_stringsdict_" + i, langOutput.iosStringsdict,
                         "Localizable.stringsdict" + (langOutput.langCode ? " (" + langOutput.langCode + ")" : ""));
                 }
             }
         }
     }
 
-    var title = "Translations (" + options.language + 
-                (options.language === LANGUAGE_IOS ? (options.modern ? " Modern" : " Legacy") : "") + ")";
-    
+    var title = "Translations (" + options.language +
+        (options.language === LANGUAGE_IOS ? (options.modern ? " Modern" : " Legacy") : "") + ")";
+
     app.setContent(htmlContent);
     SpreadsheetApp.getUi().showModalDialog(app, title);
     return app; // Return is needed for testing, but dialog is shown regardless
@@ -332,26 +332,28 @@ function makeIosXCStrings(regularStrings, plurals, options) {
         "strings": {},
         "version": "1.0"
     };
-    
+
     // Process regular strings
     for (var i = 0; i < regularStrings.length; i++) {
         var o = regularStrings[i];
         var identifier = o.identifierIos;
-        
+
         // Skip if identifier is missing or it's an array (not supported in iOS)
         if (!identifier || identifier === "" || identifier.endsWith("[]")) {
             continue;
         }
-        
+
         // Create the entry for this string key
         var entry = {
             "localizations": {}
         };
-        
+
         // Add each language's translation
         for (var langIndex = 0; langIndex < NUMBER_OF_LANGUAGES; langIndex++) {
             var text = o.texts[langIndex];
             if (text !== undefined && text !== "") {
+                // Convert parameters to iOS format
+                text = convertParametersForIos_(text);
                 var langCode = LANGUAGE_CODES[langIndex];
                 entry.localizations[langCode] = {
                     "stringUnit": {
@@ -361,28 +363,28 @@ function makeIosXCStrings(regularStrings, plurals, options) {
                 };
             }
         }
-        
+
         // Only add the entry if it has at least one localization
         if (Object.keys(entry.localizations).length > 0) {
             xcstrings.strings[identifier] = entry;
         }
     }
-    
+
     // Process plurals
     for (var baseKey in plurals) {
         if (plurals.hasOwnProperty(baseKey)) {
             var pluralData = plurals[baseKey];
-            
+
             // Create entry for this plural key
             var entry = {
                 "localizations": {}
             };
-            
+
             // Process each language
             for (var langIndex = 0; langIndex < NUMBER_OF_LANGUAGES; langIndex++) {
                 var langCode = LANGUAGE_CODES[langIndex];
                 var hasTranslationsForLang = false;
-                
+
                 // Check if any plural form has a translation for this language
                 for (var quantity in pluralData) {
                     if (pluralData.hasOwnProperty(quantity)) {
@@ -393,18 +395,20 @@ function makeIosXCStrings(regularStrings, plurals, options) {
                         }
                     }
                 }
-                
+
                 if (hasTranslationsForLang) {
                     // Initialize the variations object for plurals
                     var variations = {
                         "plural": {}
                     };
-                    
+
                     // Add each plural form that has a translation
                     for (var quantity in pluralData) {
                         if (pluralData.hasOwnProperty(quantity)) {
                             var text = pluralData[quantity].texts[langIndex];
                             if (text !== undefined && text !== "") {
+                                // Convert parameters to iOS format
+                                text = convertParametersForIos_(text);
                                 variations.plural[quantity] = {
                                     "stringUnit": {
                                         "state": "translated",
@@ -414,21 +418,21 @@ function makeIosXCStrings(regularStrings, plurals, options) {
                             }
                         }
                     }
-                    
+
                     // Add the variations to the language
                     entry.localizations[langCode] = {
                         "variations": variations
                     };
                 }
             }
-            
+
             // Only add the entry if it has at least one localization
             if (Object.keys(entry.localizations).length > 0) {
                 xcstrings.strings[baseKey] = entry;
             }
         }
     }
-    
+
     // Convert to a pretty-printed JSON string
     return JSON.stringify(xcstrings, null, 2);
 }
@@ -452,8 +456,16 @@ function makeAndroidString(regularStrings, plurals, textIndex, options) {
 
         // Skip if identifier is missing or text for this language is empty
         if (!identifier || identifier === "" || text === undefined || text === "") {
+            if (identifier.startsWith("/*") && identifier.endsWith("*/")) {
+                // It's a comment
+                exportString += "\n\t" + '<!-- ' + identifier.substring(2, identifier.length - 2) + ' -->' + "\n";
+            }
+            exportString += "\n";
             continue;
         }
+
+        // Convert parameters to Android format
+        text = convertParametersForAndroid_(text);
 
         // Handle closing previous string-array
         if (!identifier.endsWith("[]") && prevIdentifier.endsWith("[]")) {
@@ -497,6 +509,8 @@ function makeAndroidString(regularStrings, plurals, textIndex, options) {
                     if (pluralData.hasOwnProperty(quantity)) {
                         var text = pluralData[quantity].texts[textIndex];
                         if (text !== undefined && text !== "") {
+                            // Convert parameters to Android format
+                            text = convertParametersForAndroid_(text);
                             exportString += "\t\t" + '<item quantity="' + quantity + '">' + escapeXml_(text) + '</item>' + "\n";
                         }
                     }
@@ -527,8 +541,16 @@ function makeIosString(regularStrings, textIndex, options) {
         // Skip if identifier is missing or text for this language is empty
         // Also skip string arrays for iOS .strings file
         if (!identifier || identifier === "" || identifier.endsWith("[]") || text === undefined || text === "") {
+            if (identifier.startsWith("/*") && identifier.endsWith("*/")) {
+                // It's a comment
+                stringsContent += "\n" + identifier + "\n";
+            }
+            stringsContent += "\n";
             continue;
         }
+
+        // Convert parameters to iOS format
+        text = convertParametersForIos_(text);
 
         // Add to .strings file content
         stringsContent += '"' + escapeString_(identifier) + '" = "' + escapeString_(text) + '";\n';
@@ -568,6 +590,8 @@ function makeIosStringsdict(plurals, textIndex, options) {
                 for (var quantity in pluralData) {
                     if (pluralData.hasOwnProperty(quantity) && pluralData[quantity].texts[textIndex]) {
                         var text = pluralData[quantity].texts[textIndex];
+                        // Convert parameters to iOS format first
+                        text = convertParametersForIos_(text);
                         // Look for common format specifiers
                         if (text.includes('%d') || text.includes('%@') || text.includes('%ld') || text.includes('%lu') || text.includes('%lld') || text.includes('%llu')) {
                             formatKey = escapeXml_(text);
@@ -578,7 +602,8 @@ function makeIosStringsdict(plurals, textIndex, options) {
                 }
                 // If no format specifier like %d found, use the 'other' value if available, else default
                 if (!foundFormat && pluralData['other'] && pluralData['other'].texts[textIndex]) {
-                    formatKey = escapeXml_(pluralData['other'].texts[textIndex]);
+                    var otherText = convertParametersForIos_(pluralData['other'].texts[textIndex]);
+                    formatKey = escapeXml_(otherText);
                 }
 
 
@@ -596,6 +621,8 @@ function makeIosStringsdict(plurals, textIndex, options) {
                     if (pluralData.hasOwnProperty(quantity)) {
                         var text = pluralData[quantity].texts[textIndex];
                         if (text !== undefined && text !== "") {
+                            // Convert parameters to iOS format
+                            text = convertParametersForIos_(text);
                             dictContent += '            <key>' + escapeXml_(quantity) + '</key>\n';
                             dictContent += '            <string>' + escapeXml_(text) + '</string>\n';
                         }
@@ -762,13 +789,76 @@ function getObjects(data, keys) {
 
         // Only add the object if it has at least one identifier AND some text content
         // Or adjust this logic based on requirements (e.g., must have ID for *target* platform)
-        if (hasIdentifier) { // Maybe check (hasIdentifier && hasAnyText)?
-            objects.push(object);
-        }
+        // if (hasIdentifier) { // Maybe check (hasIdentifier && hasAnyText)?
+        objects.push(object);
+        // }
     }
     return objects;
 }
 
+
+// Parameter Format Conversion Functions
+
+/*
+   Converts parameter formats for iOS strings and escapes standalone % symbols.
+   Examples:
+   - Simple: "%d items" -> "%d items" (no change for simple formats)
+   - Positional: "%1$@ and %2$d" -> "%1$@ and %2$d" (already correct for iOS)
+   - Android positional: "%1$s" -> "%1$@" (convert s to @)
+   - Android simple: "%s and %d" -> "%1$@ and %2$d" (convert from Android)
+   - Escape standalone %: "50% off" -> "50%% off"
+*/
+function convertParametersForIos_(text) {
+    if (typeof text !== 'string') return text;
+
+    var result = text;
+
+    // First, convert Android positional parameters like %1$s to iOS format %1$@
+    result = result.replace(/%(\d+)\$s/g, function (match, position) {
+        return '%' + position + '$@';
+    });
+
+    // Check if there are any positional parameters already in the string
+    var hasPositionalParams = /\%\d+\$/.test(result);
+
+    if (!hasPositionalParams) {
+        // Only convert simple parameters if there are no positional ones
+        var paramCount = 0;
+        result = result.replace(/%([sd@])/g, function (match, type) {
+            paramCount++;
+            var iosType = type === 's' ? '@' : type;
+            return '%' + paramCount + '$' + iosType;
+        });
+    }
+
+    // Escape standalone % symbols (not part of format specifiers)
+    // This regex matches % that are NOT followed by:
+    // - digits followed by $ and a letter (positional parameters like %1$@)
+    // - letters directly (simple parameters like %d, %@)
+    // - another % (already escaped)
+    result = result.replace(/%(?!(\d+\$[a-zA-Z@]|[a-zA-Z@]|%))/g, '%%');
+
+    return result;
+}
+
+/*
+   Converts parameter formats for Android strings.
+   Examples:
+   - iOS-style: "%1$@ and %2$d" -> "%1$s and %2$d" (convert @ to s)
+   - Simple iOS: "%@ item" -> "%s item" (convert @ to s)
+   - Keep Android: "%s and %d" -> "%s and %d" (no change)
+*/
+function convertParametersForAndroid_(text) {
+    if (typeof text !== 'string') return text;
+
+    // Convert iOS @ parameter to Android s parameter
+    // Handle both positional (%1$@) and simple (%@) formats
+    var result = text.replace(/%(\d+\$)?@/g, function (match, position) {
+        return '%' + (position || '') + 's';
+    });
+
+    return result;
+}
 
 // Utils (Added escaping functions)
 
@@ -817,4 +907,28 @@ function isAlnum_(char) {
 
 function isDigit_(char) {
     return char >= '0' && char <= '9';
-} 
+}
+
+// Test functions for parameter conversion (for development/debugging)
+// function testParameterConversion() {
+//     Logger.log("=== Testing Parameter Conversion ===");
+
+//     // Test iOS conversion
+//     Logger.log("iOS Conversion Tests:");
+//     Logger.log('"%d items" -> "' + convertParametersForIos_("%d items") + '"');  // Expected: "%1$d items"
+//     Logger.log('"%s and %d" -> "' + convertParametersForIos_("%s and %d") + '"');  // Expected: "%1$@ and %2$d"
+//     Logger.log('"%1$@ and %2$d" -> "' + convertParametersForIos_("%1$@ and %2$d") + '"');  // Expected: "%1$@ and %2$d" (no change)
+//     Logger.log('"Hello %@" -> "' + convertParametersForIos_("Hello %@") + '"');  // Expected: "Hello %1$@"
+//     Logger.log('"Search %1$s" -> "' + convertParametersForIos_("Search %1$s") + '"');  // Expected: "Search %1$@"
+//     Logger.log('"50% off" -> "' + convertParametersForIos_("50% off") + '"');  // Expected: "50%% off"
+//     Logger.log('"Save %1$s with %d%% discount" -> "' + convertParametersForIos_("Save %1$s with %d%% discount") + '"');  // Expected: "Save %1$@ with %d%% discount"
+
+//     // Test Android conversion  
+//     Logger.log("Android Conversion Tests:");
+//     Logger.log('"%1$@ and %2$d" -> "' + convertParametersForAndroid_("%1$@ and %2$d") + '"');  // Expected: "%1$s and %2$d"
+//     Logger.log('"Hello %@" -> "' + convertParametersForAndroid_("Hello %@") + '"');  // Expected: "Hello %s"
+//     Logger.log('"%s and %d" -> "' + convertParametersForAndroid_("%s and %d") + '"');  // Expected: "%s and %d" (no change)
+//     Logger.log('"Count: %d" -> "' + convertParametersForAndroid_("Count: %d") + '"');  // Expected: "Count: %d" (no change)
+//     Logger.log('"Search %1$s" -> "' + convertParametersForAndroid_("Search %1$s") + '"');  // Expected: "Search %1$s" (no change)
+//     Logger.log('"50% off" -> "' + convertParametersForAndroid_("50% off") + '"');  // Expected: "50% off" (no change)
+// } 
