@@ -583,31 +583,10 @@ function makeIosStringsdict(plurals, textIndex, options) {
                 dictContent += '    <key>' + escapeXml_(baseKey) + '</key>\n';
                 dictContent += '    <dict>\n';
                 dictContent += '        <key>NSStringLocalizedFormatKey</key>\n';
-                // Find a format specifier in one of the values (e.g., %d, %@). Default to %#@plural@ if none found.
-                // A common pattern is to use %d for the count in 'other'.
-                var formatKey = '%#@' + escapeXml_(baseKey) + '@'; // Default reference
-                var foundFormat = false;
-                for (var quantity in pluralData) {
-                    if (pluralData.hasOwnProperty(quantity) && pluralData[quantity].texts[textIndex]) {
-                        var text = pluralData[quantity].texts[textIndex];
-                        // Convert parameters to iOS format first
-                        text = convertParametersForIos_(text);
-                        // Look for common format specifiers
-                        if (text.includes('%d') || text.includes('%@') || text.includes('%ld') || text.includes('%lu') || text.includes('%lld') || text.includes('%llu')) {
-                            formatKey = escapeXml_(text);
-                            foundFormat = true;
-                            break; // Use the first one found
-                        }
-                    }
-                }
-                // If no format specifier like %d found, use the 'other' value if available, else default
-                if (!foundFormat && pluralData['other'] && pluralData['other'].texts[textIndex]) {
-                    var otherText = convertParametersForIos_(pluralData['other'].texts[textIndex]);
-                    formatKey = escapeXml_(otherText);
-                }
-
-
-                dictContent += '        <string>' + formatKey + '</string>\n';
+                // NSStringLocalizedFormatKey should always use the %#@variable@ format
+                // where 'variable' is the baseKey name
+                var formatKey = '%#@' + baseKey + '@';
+                dictContent += '        <string>' + escapeXml_(formatKey) + '</string>\n';
                 dictContent += '        <key>' + escapeXml_(baseKey) + '</key>\n'; // The variable key name matches the plural base key
                 dictContent += '        <dict>\n';
                 dictContent += '            <key>NSStringFormatSpecTypeKey</key>\n';
