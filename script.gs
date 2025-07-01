@@ -869,7 +869,11 @@ function escapeHtml_(unsafe) {
 // Escaping for iOS .strings values (quotes and backslashes)
 function escapeString_(unsafe) {
     if (typeof unsafe !== 'string') return unsafe;
-    return unsafe.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+
+    return unsafe
+        .replace(/"/g, '\\"')  // Escape quotes first
+        .replace(/\n/g, '\\n')  // Replace actual newlines with \n
+        .replace(/\\(?![ntr"\\])/g, '\\\\');  // Escape backslashes, but preserve escape sequences like \n, \t, \r, \", \\
 }
 
 function isCellEmpty_(cellData) {
